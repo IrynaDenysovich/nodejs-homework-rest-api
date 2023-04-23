@@ -5,6 +5,7 @@ const {
   addContact,
   removeContact,
   updateContact,
+  updateStatusContact,
 } = require("../../models/contacts");
 
 const router = express.Router();
@@ -42,6 +43,19 @@ router.put("/:contactId", async (req, res, next) => {
   }
 
   const contact = await updateContact(req.params.contactId, req.body);
+  contact
+    ? res.status(201).json(contact)
+    : res.status(404).json({ message: "Not found" });
+});
+
+router.post("/:contactId/favorite", async (req, res, next) => {
+  const keys = Object.keys(req.body);
+  if (keys.length === 0 || !keys.includes("favorite")) {
+    res.status(404).json({ message: "missing field favorite" });
+    return;
+  }
+
+  const contact = await updateStatusContact(req.params.contactId, req.body);
   contact
     ? res.status(201).json(contact)
     : res.status(404).json({ message: "Not found" });
