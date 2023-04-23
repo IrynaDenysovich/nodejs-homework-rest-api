@@ -1,91 +1,77 @@
-const fs = require("fs/promises");
-const path = require("path");
-const { uuid } = require("uuidv4");
-
-const contactsJsonName = "contacts.json";
+const { connectMongo, getObjectId } = require("../routes/api/mongodb");
 const requiredFields = ["name", "email", "phone"];
 
-const getConstactsPath = () => path.join(__dirname, "/" + contactsJsonName);
-
 const readContactArray = async () => {
-  let result = [];
-  try {
-    const data = await fs.readFile(getConstactsPath(), { encoding: "utf8" });
-    result = JSON.parse(data);
-  } catch (error) {
-    console.error(error);
-  }
-  return result;
-};
-
-const writeContactArray = async (contacts) => {
-  let result = false;
-  try {
-    await fs.writeFile(getConstactsPath(), JSON.stringify(contacts, null, 4), {
-      encoding: "utf8",
-    });
-    result = true;
-  } catch (error) {
-    console.error(error);
-  }
-  return result;
+  const collection = await connectMongo();
+  return await collection.find();
 };
 
 const listContacts = async () => await readContactArray();
 
 const getContactById = async (contactId) => {
-  const contacts = await readContactArray();
-  const filteredConstacts = contacts.filter(
-    (contact) => contact.id === contactId
-  );
-  return filteredConstacts[0];
+  const objectId = getObjectId(contactId);
+  if (!!objectId === true) {
+    const ContactCollection = await connectMongo();
+    return await ContactCollection.findOne({ _id: objectId });
+  }
+  return null;
 };
 
 const removeContact = async (contactId) => {
-  const contacts = await readContactArray();
-
-  for (let i = 0; i < contacts.length; ++i) {
-    if (contacts[i].id === contactId) {
-      contacts.splice(i, 1);
-      await writeContactArray(contacts);
-      return true;
-    }
+  const objectId = getObjectId(contactId);
+  if (!!objectId === true) {
+    const ContactCollection = await connectMongo();
+    const result = await ContactCollection.deleteOne({ _id: objectId });
+    return result.deletedCount;
   }
   return false;
 };
 
 const addContact = async (body) => {
   if (!checkRequiredFields(body)) return false;
-
   const { name, email, phone } = body;
-  const contacts = await readContactArray();
-  const contact = {
-    id: uuid(),
-    name: name,
-    email: email,
-    phone: phone,
-  };
-  contacts.push(contact);
-  await writeContactArray(contacts);
-  return contact;
+  const ContactCollection = await connectMongo();
+  const contact = new ContactCollection();
+  contact.name = name;
+  contact.email = email;
+  contact.phone = phone;
+  return await contact.save();
 };
 
 const updateContact = async (contactId, body) => {
-  const contacts = await readContactArray();
-
-  for (let i = 0; i < contacts.length; ++i) {
-    const contact = contacts[i];
-    if (contact.id === contactId) {
-      for (const field of requiredFields) {
-        if (!!body[field] === true) {
-          contact[field] = body[field];
-        }
-      }
-      contacts[i] = contact;
-      await writeContactArray(contacts);
-      return contacts[i];
+  const updateObject = {};
+  for (const field of requiredFields) {
+    if (!!body[field] === true) {
+      updateObject[field] = body[field];
     }
   }
+
+  const objectId = getObjectId(contactId);
+  if (!!objectId === true) {
+    const ContactCollection = await connectMongo();
+    const result = await ContactCollection.findOneAndUpdate(
+      { _id: objectId },
+      updateObject,
+      { returnDocument: "after" }
+    );
+    return result;
+  }
+
+  return false;
+};
+
+const updateStatusContact = async (contactId, body) => {
+  const objectId = getObjectId(contactId);
+  if (!!objectId === true) {
+    const ContactCollection = await connectMongo();
+    const result = await ContactCollection.findOneAndUpdate(
+      { _id: objectId },
+      { favorite: !!body.favorite },
+      { returnDocument: "after" }
+    );
+    return result;
+  }
+
   return false;
 };
 
@@ -104,4 +90,5 @@ module.exports = {
   removeContact,
   addContact,
   updateContact,
+  updateStatusContact,
 };
