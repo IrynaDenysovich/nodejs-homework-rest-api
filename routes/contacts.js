@@ -1,4 +1,5 @@
 const express = require("express");
+
 const {
   listContacts,
   getContactById,
@@ -6,16 +7,16 @@ const {
   removeContact,
   updateContact,
   updateStatusContact,
-} = require("../../models/contacts");
+} = require("../models/contacts");
 
 const router = express.Router();
 
 router.get("/", async (req, res, next) =>
-  res.json({ data: await listContacts() })
+  res.json({ data: await listContacts(req.user) })
 );
 
 router.get("/:contactId", async (req, res, next) => {
-  const contact = await getContactById(req.params.contactId);
+  const contact = await getContactById(req.user, req.params.contactId);
   if (contact) {
     res.json({ data: contact });
   } else {
@@ -24,14 +25,14 @@ router.get("/:contactId", async (req, res, next) => {
 });
 
 router.post("/", async (req, res, next) => {
-  const contact = await addContact(req.body);
+  const contact = await addContact(req.user, req.body);
   contact
     ? res.status(201).json(contact)
     : res.status(404).json({ message: "missing required name field" });
 });
 
 router.delete("/:contactId", async (req, res, next) =>
-  (await removeContact(req.params.contactId))
+  (await removeContact(req.user, req.params.contactId))
     ? res.status(200).json({ message: "contact deleted" })
     : res.status(404).json({ message: "Not found" })
 );
@@ -42,7 +43,7 @@ router.put("/:contactId", async (req, res, next) => {
     return;
   }
 
-  const contact = await updateContact(req.params.contactId, req.body);
+  const contact = await updateContact(req.user, req.params.contactId, req.body);
   contact
     ? res.status(201).json(contact)
     : res.status(404).json({ message: "Not found" });
@@ -55,7 +56,11 @@ router.post("/:contactId/favorite", async (req, res, next) => {
     return;
   }
 
-  const contact = await updateStatusContact(req.params.contactId, req.body);
+  const contact = await updateStatusContact(
+    req.userreq.user,
+    req.params.contactId,
+    req.body
+  );
   contact
     ? res.status(201).json(contact)
     : res.status(404).json({ message: "Not found" });
