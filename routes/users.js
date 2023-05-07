@@ -1,7 +1,16 @@
 const express = require("express");
-const { clientsAuthenticate } = require("../config/config-passport");
-const { registerUser, loginUser, logoutUser } = require("../models/users");
 const router = express.Router();
+const multer = require("multer");
+
+const { clientsAuthenticate } = require("../config/config-passport");
+const {
+  registerUser,
+  loginUser,
+  logoutUser,
+  patchAvatar,
+} = require("../models/users");
+
+const upload = multer({ dest: "tmp/" });
 
 router.post("/register", async (req, res, next) => {
   try {
@@ -35,6 +44,20 @@ router.get("/current", clientsAuthenticate, async (req, res, next) =>
     email: req.user.email,
     subscription: req.user.subscription,
   })
+);
+
+router.patch(
+  "/avatars",
+  clientsAuthenticate,
+  upload.single("avatar"),
+  async (req, res, next) => {
+    try {
+      const { status, model } = await patchAvatar(req.file.path, req.user);
+      res.status(status).json(model);
+    } catch (err) {
+      return res.status(500).json({ message: err.message });
+    }
+  }
 );
 
 module.exports = router;
