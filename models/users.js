@@ -3,19 +3,25 @@ const jwt = require("jsonwebtoken");
 const gravatar = require("gravatar");
 const fs = require("fs");
 const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 
 const { connectMongo } = require("../api/mongodb");
 const { UsersCollection } = require("../api/users");
 const { RigistrationValidate } = require("./validation");
 const { jimpResizeAndDelete } = require("../utils/jimp");
+const { sendMail } = require("./mailer");
 
 require("dotenv").config();
 const secret = process.env.SECRET_KEY;
 const publicDir = process.env.PUBLIC_DIRECTORY;
 const avatarsDir = process.env.AVATARS_DIRECTORY;
+const mailtrapAuth = {
+  user: process.env.MAILTRAP_USER,
+  pass: process.env.MAILTRAP_PASS,
+};
 
 // REGISTER
-const registerUser = async (body) => {
+const registerUser = async (body, host) => {
   const { complete, model } = await RigistrationValidate(body);
   if (!complete) {
     return {
@@ -39,6 +45,9 @@ const registerUser = async (body) => {
   }
 
   model.avatarURL = gravatar.url(model.email, { s: "200" });
+  model.verificationToken = uuidv4();
+
+  await sendMail(model, mailtrapAuth, host);
 
   model.password = await bcrypt.hash(model.password, 10);
   const newUser = new UsersCollection(model);
@@ -73,6 +82,7 @@ const loginUser = async (body) => {
   await connectMongo();
   const existsUser = await UsersCollection.findOne({
     email: model.email,
+    verify: true,
   });
 
   if (!existsUser) {
@@ -135,9 +145,82 @@ const renameFile = async (oldName, newName) => {
   });
 };
 
+// verification Token
+const verificationToken = async (token, host) => {
+  await connectMongo();
+  const user = await UsersCollection.findOne({
+    verificationToken: token,
+  });
+
+  if (!user) {
+    return {
+      status: 404,
+      model: {
+        message: "User not found",
+      },
+    };
+  }
+
+  user.verificationToken = null;
+  user.verify = true;
+
+  await user.save();
+
+  return {
+    status: 200,
+    model: {
+      message: "Verification successful",
+    },
+  };
+};
+
+// verification Resend
+const verificationResend = async (body, host) => {
+  if (!!body.email === false) {
+    return {
+      status: 400,
+      model: { message: "missing required field email" },
+    };
+  }
+
+  await connectMongo();
+  const user = await UsersCollection.findOne({
+    email: body.email,
+  });
+
+  if (!user) {
+    return {
+      status: 404,
+      model: {
+        message: "User not found",
+      },
+    };
+  }
+
+  if (user.verify) {
+    return {
+      status: 400,
+      model: {
+        message: "Verification has already been passed",
+      },
+    };
+  }
+
+  await sendMail(user, mailtrapAuth, host);
+
+  return {
+    status: 200,
+    model: {
+      message: "Verification email sent",
+    },
+  };
+};
+
 module.exports = {
   registerUser,
   loginUser,
   logoutUser,
   patchAvatar,
+  verificationToken,
+  verificationResend,
 };

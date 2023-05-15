@@ -8,13 +8,15 @@ const {
   loginUser,
   logoutUser,
   patchAvatar,
+  verificationToken,
+  verificationResend,
 } = require("../models/users");
 
 const upload = multer({ dest: "tmp/" });
 
 router.post("/register", async (req, res, next) => {
   try {
-    const { status, model } = await registerUser(req.body);
+    const { status, model } = await registerUser(req.body, req.headers.host);
     res.status(status).json(model);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -59,5 +61,28 @@ router.patch(
     }
   }
 );
+
+router.get("/verify/:verificationToken", async (req, res, next) => {
+  try {
+    const { status, model } = await verificationToken(
+      req.params.verificationToken
+    );
+    res.status(status).json(model);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+router.post("/verify", async (req, res, next) => {
+  try {
+    const { status, model } = await verificationResend(
+      req.body,
+      req.headers.host
+    );
+    res.status(status).json(model);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
 
 module.exports = router;
